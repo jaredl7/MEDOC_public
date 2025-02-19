@@ -11,6 +11,6 @@ The following command line arguments can be specified to change the default beha
 -be float This is the value for the reference energy. Base value is -709*R*T. This can be changed to get around the partition function "breaking" due to exceeding max floating point value.
 
 
-If the procedure does not get to the end and has an error message, this may be due to a system dependent floating point issues. Try a machine with higher precision. This was tested on a lnux machine withg a 64-bit  python distribution.
+If the procedure does not get to the end and has an error message, this may be due to a system dependent floating point issues. Try a machine with higher precision. This was tested on a linux machine with a 64-bit  python distribution.
 
 You will get the error message : RuntimeWarning: divide by zero encountered in log This is normal.

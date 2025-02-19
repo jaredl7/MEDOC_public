@@ -2089,12 +2089,18 @@ if __name__=="__main__":
     refs=get_ref_pkas_MEDOC_public()
     contexts,states=get_base_contexts(map,neigh,seq_1,seq_data_q)
     pat_E,pat_ste,pat_seq=get_all_contexts(contexts,states,neigh,refs,unshifted,reverse,penta,additive,T,base_rep,reduced)
+    save_pH=np.zeros((len(Electric_fields),len(pH)))
     if per_res :
-         None
+        dim=(len(Electric_fields),len(contexts)+1,len(contexts))
+        for i in range(neigh):
+            dim=dim+(2,)
+        save_lvl_context0=np.zeros(dim,dtype=np.longdouble)
+        save_lvl_context0[:]=float('+inf')
+        save_lvl_context1=np.zeros(dim,dtype=np.longdouble)
+        save_lvl_context1[:]=float('+inf')
     else :
         save_lvl_E=np.zeros((len(Electric_fields),len(pat_E)+1,1),dtype=np.longdouble)
         save_lvl_disc_E=np.zeros((len(Electric_fields),len(pat_E)+1,neigh,neigh),dtype=np.longdouble)
-        save_pH=np.zeros((len(Electric_fields),len(pH)))
     signs=[seq_data_q[titrable_residue_indexes[i]] for i in range(len(titrable_residue_indexes))]
     for E in range(len(Electric_fields)):
         Eext=Electric_fields[E]
@@ -2106,12 +2112,14 @@ if __name__=="__main__":
         if per_res :
             lvl_context0,lvl_context1=main_prediction(T,neigh,contexts,pat_E_eff,pat_ste,pat_seq,map,prun_during,per_res,
                                                          base_E,test_time,max_diff)
+            save_lvl_context0[E]=lvl_context0
+            save_lvl_context1[E]=lvl_context1
         else :
             lvl_ste,lvl_E,lvl_disc_E=main_prediction(T,neigh,contexts,pat_E_eff,pat_ste,pat_seq,map,prun_during,per_res,
                                                         base_E,test_time,max_diff)
+            save_lvl_E[E]=lvl_E
+            save_lvl_disc_E[E]=lvl_disc_E
         save_pH[E]=pH_eff
-        save_lvl_E[E]=lvl_E
-        save_lvl_disc_E[E]=lvl_disc_E
     disc_E=[]
     print("There are ",pos_res-arg_res+neg_res," ionizable residue")
     if test_time :
@@ -2322,6 +2330,7 @@ if __name__=="__main__":
             for i in range(Nmes):
                 Meso_G_all[E,i]=get_G_sum([get_G_sum(lvl_context0[i,0].flatten(),T),get_G_sum(lvl_context1[i,0].flatten(),T)],T)
             write_per_res_F(save0,save1,suffix)
+            Meso_G_all[E]=Meso_G_all[E,::-1]-2*base_E
     else :
         for E in range(len(Electric_fields)):
             for i in range(Nmes):
@@ -2333,7 +2342,7 @@ if __name__=="__main__":
     check_and_create_rep('Results/Fs')
     write_file('Results/Fs/Mesostate_F_'+suffix+'.txt',W,silent=False)
     plt.close()
-    colors=[cm.coolwarm_r(float(i)/(len(Electric_fields)-1)) for i in range(len(Electric_fields))]
+    colors=[cm.coolwarm_r(float(i)/(len(Electric_fields))) for i in range(len(Electric_fields))]
     for E in range(len(Electric_fields)):
         plt.plot(pH,save_pH[E],color=colors[E],label='E='+str(Electric_fields[E]))
     plt.plot(pH,pH,color='k',linestyle='--',label='Reference pH')
@@ -2345,12 +2354,11 @@ if __name__=="__main__":
         Weights_norm,Weights_norm_err,Proba_meso,Proba_meso_err=get_probas_2(Meso_G_all[E],Meso_G_all[E]*0.,save_pH[E],T)
         Values=np.zeros((len(pH)),dtype=float)
         Values=np.transpose(Values)
-        SSP=qs
-        for i in range(len(SSP)):
-            for j in range(len(SSP[i])):
-                Values[:]=Values[:]+Proba_meso[i]*1.*SSP[i][j]
+        for i in range(len(qs)):
+            for j in range(len(qs[i])):
+                Values[:]=Values[:]+Proba_meso[i]*1.*qs[i][j]
         if np.any(np.isnan(Values[:])) :
-            print("There is a problem in computing the partition function, resulting in NaNs. This can normaly be fixed by changing the base_E")
+            print("There is a problem in computing the partition function, resulting in NaNs. This can normaly be fixed by changing the base_E (currently is "+str(base_E)+")")
             input()
         plt.plot(pH,Values,label='E='+str(Electric_fields[E])+'V',color=colors[E])
     max_all=np.amax(qs)
