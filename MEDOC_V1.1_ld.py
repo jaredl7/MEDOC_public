@@ -1,3 +1,7 @@
+def check_and_create_rep(directory):
+    if not os.path.exists(directory):
+        os.makedirs(directory)    
+        print("Created directory : "+directory)
 def  initialize_additive_DF_array_MEDOC_public():
     import numpy as np
     global DF_V,DF_Q
@@ -702,7 +706,7 @@ def get_ref_pkas(mode,FF='OPLS',DF_only=True,version=-1,silent=True,suffix='') :
 def read_key_file(key_file,pattern,silent=True):
     found_it=[0 for i in range(len(pattern))]
     data=load_file(key_file,silent=True)
-    out=[]
+    out=['' for i in range(len(pattern))]
     if type(pattern)==type([]) :
         W=''
         val=''
@@ -717,7 +721,7 @@ def read_key_file(key_file,pattern,silent=True):
                 if found==True:
                     if silent==False : 
                         print(pattern[g]," is ",data[i].split()[1])
-                    out+=[data[i].split()[1]]                    
+                    out[g]=data[i].split()[1]
     return out             
 def get_ref_pkas_MEDOC_public() :
     refs=[['GLX','LYX','ASX','TYX','SXP','TXP','YXP','HDX','HEX','HIX'],
@@ -1145,6 +1149,9 @@ def get_pattern_additive_F(pattern,T,neigh,ent_corr=False):
 def main_prediction(T,neigh,contexts,pat_E,pat_ste,pat_seq,map,prun_during,per_res,base_E,test_time,max_diff,silent=False):
     import itertools
     import sys
+    if test_time :
+        import time
+        t0=time.time()
     blocks=[]
     tmp=[]
     for i in range(len(contexts)):
@@ -1307,8 +1314,8 @@ def main_prediction(T,neigh,contexts,pat_E,pat_ste,pat_seq,map,prun_during,per_r
             else :
                 lvl_ste[t+1]=temp_ste0[t]
                 lvl_E[t+1]=temp_E0[t]
-        for t in range(i+1):
-            if prun_during and not (math.isinf(max_diff) and max_diff>0):
+        if prun_during and not (math.isinf(max_diff) and max_diff>0):
+            for t in range(i+1):
                 if len(lvl_ste[t])<2 :
                     continue
                 if lvl_ste[t][0]=='':
@@ -1345,6 +1352,9 @@ def main_prediction(T,neigh,contexts,pat_E,pat_ste,pat_seq,map,prun_during,per_r
         if prun_during and t!=0 and math.isinf(get_G_sum(lvl_disc_E[t].flatten(),T)) and not (math.isinf(max_diff) and max_diff>0):
             print("MEDOC failed due to lack of machine precision. Try a 64-bit python environment.")
             quit(1)
+    if test_time :
+        t1=time.time()
+        print(t1-t0)
     if per_res:
         return lvl_context0,lvl_context1
     else :
@@ -1372,10 +1382,6 @@ def get_microstates_population_mesostates(DFs,DFs_err,T):
         p+=[W[i]/sum(W)]
         p_err+=[p[-1]*np.sqrt((W_err[i]/W[i])**2+(W_tot_err/sum(W))**2)]
     return p,p_err
-def check_and_create_rep(directory):
-    if not os.path.exists(directory):
-        os.makedirs(directory)    
-        print("Created directory : "+directory)
 def get_mesostate_site_spe_G(lvl_ste,lvl_E,T):
     out0=[]
     out1=[]
@@ -1814,13 +1820,11 @@ def plot_quantity_vs_pH2(vals,Proba_1,pH,seq_1,st_count,name,publi_figure=False,
     pgf_with_latex = {
         "text.usetex": True,
         "pgf.preamble":
-            r'\usepackage{color}'
-        ,
-        "font.family": "Times New Roman"
-    }
+            r'\usepackage{color}',
+        "font.family": "Times New Roman"}
     import matplotlib
     matplotlib.rcParams.update(pgf_with_latex)
-    import matplotlib.pyplot as plt    
+    import matplotlib.pyplot as plt
     from matplotlib import cm
     plt.close()
     if publi_figure:
@@ -1849,6 +1853,73 @@ def save_pH_dependent_curve(vals,pH,name):
         W+=str(pH[p])+'\t'+str(vals[p])+'\n'
     check_and_create_rep('./Results/Plots/pH_plots_raw_data')
     write_file('./Results/Plots/pH_plots_raw_data/'+name+'.txt',W)
+"""MEDOC 2.0 is meant to take the prediction of protonation with  external electric fields"""
+__author__ = "Martin Fossat"
+__credits__ = ["Martin Fossat"]
+__version__ = "2.0"
+__maintainer__ = "Martin Fossat"
+__email__ = "fossat@ie-freiburg.mpg.de"
+__status__ = "Production"
+def pH_rescaled(pH_org,Eext):
+    C0Hp=10**(-pH_org[:])
+    C_Hp=C0Hp[:]*np.exp((-e*Na*Eext*J_to_kcal)/(R*T))
+    pH_eff=-np.log10(C_Hp[:])
+    return pH_eff
+def plot_probas3(Proba,Proba_err,pH_eff,pH,title='Proba',subrep='./',legend=[],Eext=0):
+    import matplotlib
+    import math
+    import matplotlib.pyplot as plt
+    plt.rcParams["font.family"]="Times New Roman"
+    from matplotlib.backends.backend_pgf import FigureCanvasPgf
+    matplotlib.backend_bases.register_backend('pdf', FigureCanvasPgf)
+    pgf_with_latex = {
+        "text.usetex": True,
+        "pgf.preamble":
+            r'\usepackage{color}'
+        ,
+        "font.family": "Times New Roman"}
+    import matplotlib
+    matplotlib.rcParams.update(pgf_with_latex)
+    import matplotlib.pyplot as plt
+    from matplotlib import cm
+    colors=[cm.gnuplot(float(i)/len(Proba)) for i in range(len(Proba))]
+    fig=plt.figure(figsize=(7,4))
+    ax1=fig.add_axes([0.08,0.15,0.8,0.80])
+    plt.xlim(np.round(np.amin(pH_eff)),np.round(np.amax(pH_eff)))
+    plt.gca().set_ylim(top=1.)
+    pH=np.array(pH)
+    if len(legend)==0:
+        legend=['' for i in range(len(Proba))]
+    plt.xlabel("Effective pH")
+    plt.ylabel("Mesostate probability")
+    for i in range(len(Proba)):
+        low_err=[]
+        high_err=[]
+        if len(Proba_err[i])!=0:
+            for p in range(len(Proba[i])):
+                if math.isinf(Proba_err[i][p]):
+                    low_err+=[Proba[i][p]-Proba_err[i][p]]
+                    high_err+=[Proba[i][p]+Proba_err[i][p]]
+                else :
+                    low_err+=[Proba[i][p]]
+                    high_err+=[Proba[i][p]]
+        else :
+            low_err+=Proba[i]
+            high_err+=Proba[i]
+        if len(Proba[i])==0 :
+            continue
+        plt.plot(pH_eff,Proba[i],color=colors[i],linestyle='-',label=str(legend[i]))
+        plt.fill_between(pH_eff, low_err, high_err, color=colors[i],alpha=0.5)
+    plt.legend()
+    ax2=ax1.twiny()
+    ax1_ticks=ax1.get_xticks()
+    ax2_label=pH_rescaled(ax1_ticks,Eext)
+    ax2.set_xticks(ax1_ticks)
+    label=["%.2f" % ax2_label[i] for i in range(len(ax2_label))]
+    ax2.set_xticklabels(label)
+    check_and_create_rep('Results/Plots/')
+    check_and_create_rep('Results/Plots/'+subrep)
+    plt.savefig('Results/Plots/'+subrep+'/Mesostates_'+title+'_'+str(Eext)+'.pdf')
 import matplotlib
 import time
 matplotlib.use("pgf")                                                                    
@@ -1860,12 +1931,11 @@ pgf_with_latex = {
         r'\usepackage{color}',
     "font.family": "Times New Roman" }
 import matplotlib
+import math
 matplotlib.rcParams.update(pgf_with_latex)
 import matplotlib.pyplot as plt
-from matplotlib import cm
 import numpy as np
 import scipy.misc
-import math
 import os
 global AA_type
 MODULE_PATH = os.path.dirname(__file__)
@@ -1874,6 +1944,7 @@ default_res=0.01
 R=np.longdouble(1.98720425864083*10**(-3))
 if __name__=="__main__":
     import argparse
+    from matplotlib import cm
     parser = argparse.ArgumentParser()
     parser.add_argument("--site_specific","-ss",
                         help="Whether the scope of the prediction is global (0) or site-specific (1)",
@@ -1884,6 +1955,7 @@ if __name__=="__main__":
     parser.add_argument("--predict_type", "-pt",
                         help="Prediction type ([I]mplicit, [U]nshifted)",
                         default="I")
+    parser.add_argument("--base_E", "-be",help="Base Energy")
     parser.add_argument("--pH_range","-pH",nargs=2,default=[0,14])
     parser.add_argument("--nneigh", "-nn",
                         help="Number of immediate neighbors (on one side) for peptides",default=2)
@@ -1971,9 +2043,18 @@ if __name__=="__main__":
         except : 
             neigh=2
             print("Invalid value for nneigh, defaulting to ",neigh)
+    if args.base_E:
+        try :
+            base_E=float(args.base_E)
+        except :
+            base_E=-709.0*(R*T)
+            print("Invalid value for max_frac, defaulting to ",base_E)
+    else:
+        base_E=-709.0*(R*T)
+        print("No value for max_frac, defaulting to ",base_E)
     fraction_kept=0.
     max_frac=float('+inf')
-    test_time=True
+    test_time=False
     publi_figure=True
     reduced=False
     test=''
@@ -1981,11 +2062,13 @@ if __name__=="__main__":
     HT=True
     debug=False
     reverse=True
-    base_E=-709.0*(R*T)
     if HT==True :
         database_suffix='_HT'     
     else : 
         database_suffix=''
+    e=1.60217663*10**(-19)  
+    Na=6.02214076*10**(23)
+    J_to_kcal=0.0002388459
     base_rep=''
     initialize_additive_DF_array_MEDOC_public()
     pH=np.arange(pH_range[0],pH_range[1],res,dtype=np.longdouble)
@@ -2005,14 +2088,30 @@ if __name__=="__main__":
     layers_q=np.array([i for i in range(-neg_res+arg_res+base_charge,pos_res+base_charge+1)])
     refs=get_ref_pkas_MEDOC_public()
     contexts,states=get_base_contexts(map,neigh,seq_1,seq_data_q)
-    pat_E,pat_ste,pat_seq=get_all_contexts(contexts,states,neigh,refs,unshifted,reverse,penta,additive,T,base_rep,
-                                              reduced)
+    pat_E,pat_ste,pat_seq=get_all_contexts(contexts,states,neigh,refs,unshifted,reverse,penta,additive,T,base_rep,reduced)
     if per_res :
-        lvl_context0,lvl_context1=main_prediction(T,neigh,contexts,pat_E,pat_ste,pat_seq,map,prun_during,per_res,
-                                                     base_E,test_time,max_diff)
+         None
     else :
-        lvl_ste,lvl_E,lvl_disc_E=main_prediction(T,neigh,contexts,pat_E,pat_ste,pat_seq,map,prun_during,per_res,
-                                                    base_E,test_time,max_diff)
+        save_lvl_E=np.zeros((len(Electric_fields),len(pat_E)+1,1),dtype=np.longdouble)
+        save_lvl_disc_E=np.zeros((len(Electric_fields),len(pat_E)+1,neigh,neigh),dtype=np.longdouble)
+        save_pH=np.zeros((len(Electric_fields),len(pH)))
+    signs=[seq_data_q[titrable_residue_indexes[i]] for i in range(len(titrable_residue_indexes))]
+    for E in range(len(Electric_fields)):
+        Eext=Electric_fields[E]
+        pat_E_eff=[[pat_E[i][j] for j in range(len(pat_E[i]))] for i in range(len(pat_E))]
+        for i in range(len(pat_E)):
+            for j in range(len(pat_E[i])):
+                pat_E_eff[i][j]=pat_E_eff[i][j]-e*Na*Eext*J_to_kcal
+        pH_eff=pH_rescaled(pH,Eext)
+        if per_res :
+            lvl_context0,lvl_context1=main_prediction(T,neigh,contexts,pat_E_eff,pat_ste,pat_seq,map,prun_during,per_res,
+                                                         base_E,test_time,max_diff)
+        else :
+            lvl_ste,lvl_E,lvl_disc_E=main_prediction(T,neigh,contexts,pat_E_eff,pat_ste,pat_seq,map,prun_during,per_res,
+                                                        base_E,test_time,max_diff)
+        save_pH[E]=pH_eff
+        save_lvl_E[E]=lvl_E
+        save_lvl_disc_E[E]=lvl_disc_E
     disc_E=[]
     print("There are ",pos_res-arg_res+neg_res," ionizable residue")
     if test_time :
@@ -2042,7 +2141,7 @@ if __name__=="__main__":
             check_and_create_rep('./Results/States_details/')
             write_file('./Results/States_details/States_'+suffix+'.txt',SW)
             write_file('./Results/Fs/Fs_'+suffix+'.txt',EW)
-    Meso_G_all=np.zeros((Nmes),dtype=np.longdouble)
+    Meso_G_all=np.zeros((len(Electric_fields),Nmes),dtype=np.longdouble)
     if prun_during and not per_res:
         if det_lvl>=2: 
             print("q\tTotal energy\tKept energy\tDiscarded energy")
@@ -2097,10 +2196,10 @@ if __name__=="__main__":
         save0_tmp=save0
         save1_tmp=save1
         print("Computing residue wise probabilities")
-        proba0,proba1=plot_proba_F_per_res(save0-2*base_E,save1-2*base_E,pH,T)
+        proba0,proba1=plot_proba_F_per_res(save0-2*base_E,save1-2*base_E,pH_eff,T)
         if det_lvl>=1:
             print("Plotting charge density vs pH")
-            compute_charge_density(proba0,seq_data_q,pH,seq_1,map,suffix)
+            compute_charge_density(proba0,seq_data_q,pH_eff,seq_1,map,suffix)
         print("Plotting residue wise probabilities")
         IAAs=['D','E','Y','H','K']
         colors=['orange','red','maroon','darkturquoise','blue']
@@ -2135,7 +2234,7 @@ if __name__=="__main__":
         if det_lvl>=2:
             try :
                 print("Plotting all residue probabilities")
-                plot_probas(np.array(temp_all),np.array(temp_all)*0.,st_count_fake_r,pH,
+                plot_probas(np.array(temp_all),np.array(temp_all)*0.,st_count_fake_r,pH_eff,
                            title='Proba_Residue_all_'+suffix,labely='Fraction protonated',
                            color=colors_all,labels=np.array(all_labels),publi_figure=publi_figure)
             except :
@@ -2146,7 +2245,7 @@ if __name__=="__main__":
                     continue
                 try :
                     print("Plotting all "+IAAs[t]+" probabilities")
-                    plot_probas(np.array(temp_temp[t]),np.array(temp_temp[t])*0.,st_count_fake_r,pH,
+                    plot_probas(np.array(temp_temp[t]),np.array(temp_temp[t])*0.,st_count_fake_r,pH_eff,
                                    title='Proba_Residue_all_'+IAAs[t]+'_'+suffix,labely='Fraction protonated',
                                    color=all_colors_all[t],labels=all_labels_all[t],publi_figure=publi_figure)
                 except :
@@ -2159,9 +2258,9 @@ if __name__=="__main__":
             names+=[seq_1[map[i]]+str(map[i]+1)]
             try :
                 if det_lvl<4 :
-                    param_all[i]=plot_frac_and_deriv(pH,proba1[i,:],name=seq_1[map[i]]+str(map[i]+1),loc='./Results/Plots/',fit=False,plot=False)
+                    param_all[i]=plot_frac_and_deriv(pH_eff,proba1[i,:],name=seq_1[map[i]]+str(map[i]+1),loc='./Results/Plots/',fit=False,plot=False)
                 else :
-                    param_all[i]=plot_frac_and_deriv(pH,proba1[i,:],name=seq_1[map[i]]+str(map[i]+1),
+                    param_all[i]=plot_frac_and_deriv(pH_eff,proba1[i,:],name=seq_1[map[i]]+str(map[i]+1),
                                                         loc='./Results/Plots/',fit=False,plot=True)
             except :
                 print("Could not print individual figure for ",names[i])
@@ -2215,29 +2314,51 @@ if __name__=="__main__":
     if det_lvl>=5 and max_frac==0.0:
         F_meso=get_mesostate_Fs(lvl_E,T) 
         print("Computing weights restricted")
-        Weights_norm,Weights_norm_err,Proba_meso,Proba_meso_err=get_probas_2(F_meso,F_meso,pH,T)
+        Weights_norm,Weights_norm_err,Proba_meso,Proba_meso_err=get_probas_2(F_meso,F_meso,pH_eff,T)
         print("Plotting probas restricted")
-        plot_probas2(Proba_meso,Proba_meso_err,pop_count,pH,subrep='',title='Proba_restricted_'+suffix)
+        plot_probas2(Proba_meso,Proba_meso_err,pop_count,pH_eff,subrep='',title='Proba_restricted_'+suffix)
     if per_res :
-        for i in range(Nmes):
-            Meso_G_all[i]=get_G_sum([get_G_sum(lvl_context0[i,0].flatten(),T),get_G_sum(lvl_context1[i,0].flatten(),T)],T)
-        write_per_res_F(save0,save1,suffix)
+        for E in range(len(Electric_fields)):
+            for i in range(Nmes):
+                Meso_G_all[E,i]=get_G_sum([get_G_sum(lvl_context0[i,0].flatten(),T),get_G_sum(lvl_context1[i,0].flatten(),T)],T)
+            write_per_res_F(save0,save1,suffix)
     else :
-        for i in range(Nmes):
-            Meso_G_all[i]=get_G_sum(np.concatenate((lvl_disc_E[i].flatten(),lvl_E[i])),T)
-    Meso_G_all=Meso_G_all[::-1]-2*base_E  
+        for E in range(len(Electric_fields)):
+            for i in range(Nmes):
+                Meso_G_all[E,i]=get_G_sum(np.concatenate((save_lvl_disc_E[E,i].flatten(),save_lvl_E[E,i])),T)
+            Meso_G_all[E]=Meso_G_all[E,::-1]-2*base_E
     W=''
     for i in range(len(Meso_G_all)):
         W+=str(Meso_G_all[i])+'\n'
     check_and_create_rep('Results/Fs')
     write_file('Results/Fs/Mesostate_F_'+suffix+'.txt',W,silent=False)
-    if det_lvl>=1:
-        print("Computing weights")
-        Weights_norm,Weights_norm_err,Proba_meso,Proba_meso_err=get_probas_2(Meso_G_all,Meso_G_all*0.,pH,T)
-    if det_lvl>=2:
-        print("Plotting mesostate probas")
-        plot_probas2(Proba_meso,Proba_meso_err,pop_count,pH,subrep='',title='Proba_all_'+suffix,legend=layers_q)
-    if det_lvl>=1:
-        print("Plotting the charge profile")
-        check_and_create_rep('Results/Plots')
-        plot_quantity_vs_pH2(qs,Proba_meso,pH,seq_1,pop_count,'Net_charge_'+suffix,publi_figure=publi_figure,labely='Net charge')
+    plt.close()
+    colors=[cm.coolwarm_r(float(i)/(len(Electric_fields)-1)) for i in range(len(Electric_fields))]
+    for E in range(len(Electric_fields)):
+        plt.plot(pH,save_pH[E],color=colors[E],label='E='+str(Electric_fields[E]))
+    plt.plot(pH,pH,color='k',linestyle='--',label='Reference pH')
+    plt.legend()
+    plt.savefig('./Results/Plots/pH_eff_vs_pH.pdf')
+    plt.close()
+    for E in range(len(Electric_fields)):
+        print("Computing weights at electric field "+str(Electric_fields[E]))
+        Weights_norm,Weights_norm_err,Proba_meso,Proba_meso_err=get_probas_2(Meso_G_all[E],Meso_G_all[E]*0.,save_pH[E],T)
+        Values=np.zeros((len(pH)),dtype=float)
+        Values=np.transpose(Values)
+        SSP=qs
+        for i in range(len(SSP)):
+            for j in range(len(SSP[i])):
+                Values[:]=Values[:]+Proba_meso[i]*1.*SSP[i][j]
+        if np.any(np.isnan(Values[:])) :
+            print("There is a problem in computing the partition function, resulting in NaNs. This can normaly be fixed by changing the base_E")
+            input()
+        plt.plot(pH,Values,label='E='+str(Electric_fields[E])+'V',color=colors[E])
+    max_all=np.amax(qs)
+    min_all=np.amin(qs)
+    plt.xlim(0,14)
+    plt.ylim(min_all-0.5,max_all+0.5)
+    plt.legend()
+    plt.ylabel('Net Charge')
+    plt.xlabel('pH')
+    plt.tight_layout()
+    plt.savefig('Results/Plots/Q_vs_pH.pdf')
